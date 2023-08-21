@@ -96,12 +96,15 @@ class Trainer:
         with torch.no_grad():
             all_labels = []
             all_preds = []
+            total_loss = 0
             for inputs, labels in self.val_loader:
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
                 outputs = self.model(inputs)
                 _, preds = torch.max(outputs, 1)
                 all_labels.extend(labels.cpu().numpy())
                 all_preds.extend(preds.cpu().numpy())
+                loss = self.criterion(outputs, labels)
+                total_loss += loss.item()
             
             accuracy = accuracy_score(all_labels, all_preds)
             f1 = f1_score(all_labels, all_preds)
@@ -176,7 +179,23 @@ evaluator = Evaluator(model, test_loader, device)
 evaluator.evaluate()
 
 # Predicting
-sample_input = torch.randn(1, 5, input_size).to(device)
-predictor = Predictor(model, device)
-predicted_class = predictor.predict(sample_input)
-print(f"Predicted class: {predicted_class}")
+# Load the trained model from a saved file
+loaded_model = LSTMModel(input_size, hidden_size, num_layers, num_classes)
+loaded_model.load_state_dict(torch.load("best_model.pth"))
+loaded_model.to(device)
+loaded_model.eval()
+
+# Example input tensor for prediction
+sample_input = torch.randn(1, sequence_length, input_size).to(device)
+
+# Create Predictor instance
+predictor = Predictor(loaded_model, device)
+
+# Make predictions
+predicted_classes = predictor.predict(sample_input)
+
+# Convert predictions into a DataFrame
+data = {'Predicted_Class': predicted_classes}
+predictions_df = pd.DataFrame(data)
+
+print(predictions_df)
