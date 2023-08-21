@@ -49,13 +49,16 @@ class LSTMModel(nn.Module):
 
 # Step 4: Training class
 class Trainer:
-    def __init__(self, model, train_loader, val_loader, criterion, optimizer, device):
+    def __init__(self, model, train_loader, val_loader, criterion, optimizer, device, model_path, patience=5):
         self.model = model
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.criterion = criterion
         self.optimizer = optimizer
         self.device = device
+        self.model_path = model_path
+        self.best_val_loss = float('inf')
+        self.early_stopping_counter = 0
 
     def train(self, epochs):
         self.model.to(self.device)
@@ -71,8 +74,22 @@ class Trainer:
                 loss.backward()
                 self.optimizer.step()
                 total_loss += loss.item()
-            
-            print(f"Epoch [{epoch+1}/{epochs}], Loss: {total_loss:.4f}")
+
+                
+            avg_loss = total_loss / len(self.train_loader)
+            print(f"Epoch [{epoch+1}/{epochs}], Train Loss: {avg_loss:.4f}")
+
+            # Evaluate on validation set and save the best model
+            val_loss = self.evaluate()
+            if val_loss < self.best_val_loss:
+                self.best_val_loss = val_loss
+                torch.save(self.model.state_dict(), self.model_path)
+                print("Saved best model!")
+            else:
+                self.early_stopping_counter += 1
+                if self.early_stopping_counter >= self.patience:
+                    print("Early stopping triggered!")
+                    break
             
     def evaluate(self):
         self.model.eval()
@@ -100,18 +117,25 @@ class Evaluator:
     def evaluate(self):
         self.model.eval()
         with torch.no_grad():
+            total_loss = 0
             all_labels = []
             all_preds = []
             for inputs, labels in self.test_loader:
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
                 outputs = self.model(inputs)
                 _, preds = torch.max(outputs, 1)
+                loss = self.criterion(outputs, labels)
                 all_labels.extend(labels.cpu().numpy())
                 all_preds.extend(preds.cpu().numpy())
+                total_loss += loss.item()
             
             accuracy = accuracy_score(all_labels, all_preds)
             f1 = f1_score(all_labels, all_preds)
             print(f"Test Accuracy: {accuracy:.4f}, F1 Score: {f1:.4f}")
+
+            avg_loss = total_loss / len(self.val_loader)
+            print(f"Validation Loss: {avg_loss:.4f}")
+            return avg_loss
 
 # Step 6: Prediction class
 class Predictor:
